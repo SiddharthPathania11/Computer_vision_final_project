@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Data (images not tracked)
+data/raw/**/*.jpg
+data/raw/**/*.jpeg
+data/raw/**/*.png
+data/raw/**/*.webp
+data/captured/**/*.jpg
+data/captured/**/*.jpeg
+data/captured/**/*.png
+data/captured/**/*.webp
+data/synthetic/**/*.jpg
+data/synthetic/**/*.jpeg
+data/synthetic/**/*.png
+
+# Model checkpoints and results plots (large files)
+results/**/*.pt
+results/**/*.pth
+results/**/*.png
+
+# Keep JSON logs and reports
+!results/**/*.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kaggle API key
+kaggle.json
