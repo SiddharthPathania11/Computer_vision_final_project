@@ -27,10 +27,6 @@ data/synthetic/**/*.jpg
 data/synthetic/**/*.jpeg
 data/synthetic/**/*.png
 
-# Model checkpoints and results plots (large files)
-results/**/*.pt
-results/**/*.pth
-results/**/*.png
 
 # Keep JSON logs and reports
 !results/**/*.json
