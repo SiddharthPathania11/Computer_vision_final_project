@@ -11,6 +11,10 @@ venv/
 env/
 
 # Data (images not tracked)
+data/demo/*.jpg
+data/demo/*.jpeg
+data/demo/*.png
+data/demo/*.webp
 data/raw/**/*.jpg
 data/raw/**/*.jpeg
 data/raw/**/*.png
@@ -40,3 +44,4 @@ Thumbs.db
 
 # Kaggle API key
 kaggle.json
+kaggle_latest.json

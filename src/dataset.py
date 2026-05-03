@@ -51,7 +51,7 @@ class WeatherDataset(Dataset):
         if not split_file.exists():
             raise FileNotFoundError(
                 f'Split file not found: {split_file}\n'
-                'Run: python scripts/prepare_data.py --data-root data'
+                'Run: python src/prepare_data.py --data-root data'
             )
 
         with open(split_file) as f:

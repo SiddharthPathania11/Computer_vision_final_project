@@ -1,91 +1,117 @@
 """
-Scan data/raw/ and data/captured/ for real images and data/synthetic/ for
-synthetic images, then write stratified train/val/test split JSON files to
-data/splits/.
-
-Split JSON format (one file per split):
-    [{"path": "raw/clear/001.jpg", "label": "clear", "synthetic": false}, ...]
-
-Paths are relative to --data-root so the dataset loader can resolve them.
+Builds train/val/test split JSON files from the organised image directories.
+Captured images go to val/test only; synthetic images are train-only.
 """
 
 import argparse
 import json
 import random
+from collections import defaultdict
 from pathlib import Path
 
 CLASSES = ['clear', 'cloudy', 'foggy', 'rainy', 'snowy']
-IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
-
-# 70 / 15 / 15 split on real images; all synthetic goes to train only
-TRAIN_RATIO = 0.70
-VAL_RATIO = 0.15
+EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
 
 
-def collect_images(source_dir: Path, label: str, synthetic: bool) -> list[dict]:
-    if not source_dir.exists():
-        return []
+def collect_real(data_root: Path) -> tuple[list, list]:
+    """Return (seed_pool_entries, captured_entries) - synthetic excluded."""
+    seed_pool, captured = [], []
+    for source, bucket in [('raw', seed_pool), ('captured', captured)]:
+        src_dir = data_root / source
+        if not src_dir.exists():
+            continue
+        for cls in CLASSES:
+            for img in sorted((src_dir / cls).glob('*')):
+                if img.suffix.lower() in EXTENSIONS:
+                    bucket.append({
+                        'path': str(img.relative_to(data_root)),
+                        'label': cls,
+                        'source': source,
+                        'synthetic': False,
+                    })
+    return seed_pool, captured
+
+
+def collect_synthetic(data_root: Path) -> list:
+    syn_dir = data_root / 'synthetic'
     entries = []
-    for p in sorted(source_dir.iterdir()):
-        if p.suffix.lower() in IMAGE_EXTS:
-            entries.append({
-                'path': str(p.relative_to(source_dir.parent.parent)),
-                'label': label,
-                'synthetic': synthetic,
-            })
+    if not syn_dir.exists():
+        return entries
+    for cls in CLASSES:
+        for img in sorted((syn_dir / cls).glob('*')):
+            if img.suffix.lower() in EXTENSIONS:
+                entries.append({
+                    'path': str(img.relative_to(data_root)),
+                    'label': cls,
+                    'source': 'synthetic',
+                    'synthetic': True,
+                })
     return entries
 
 
-def stratified_split(entries: list[dict], seed: int) -> tuple[list, list, list]:
-    rng = random.Random(seed)
-    by_class: dict[str, list] = {c: [] for c in CLASSES}
+def stratified_split(entries: list, train_r: float, val_r: float, rng: random.Random):
+    by_class = defaultdict(list)
     for e in entries:
         by_class[e['label']].append(e)
 
     train, val, test = [], [], []
-    for cls_entries in by_class.values():
-        rng.shuffle(cls_entries)
-        n = len(cls_entries)
-        n_train = int(n * TRAIN_RATIO)
-        n_val = int(n * VAL_RATIO)
-        train.extend(cls_entries[:n_train])
-        val.extend(cls_entries[n_train:n_train + n_val])
-        test.extend(cls_entries[n_train + n_val:])
-
+    for cls, items in by_class.items():
+        rng.shuffle(items)
+        n = len(items)
+        n_tr = int(n * train_r)
+        n_va = int(n * val_r)
+        train.extend(items[:n_tr])
+        val.extend(items[n_tr:n_tr + n_va])
+        test.extend(items[n_tr + n_va:])
     return train, val, test
 
 
-def main(data_root: str, seed: int) -> None:
-    root = Path(data_root)
-    splits_dir = root / 'splits'
-    splits_dir.mkdir(parents=True, exist_ok=True)
+def make_splits(data_root: str, train_r: float = 0.70, val_r: float = 0.15, seed: int = 42):
+    data_root = Path(data_root)
+    rng = random.Random(seed)
 
-    real_entries = []
-    synthetic_entries = []
+    seed_pool, captured = collect_real(data_root)
+    synthetic = collect_synthetic(data_root)
 
-    for label in CLASSES:
-        real_entries.extend(collect_images(root / 'raw' / label, label, synthetic=False))
-        real_entries.extend(collect_images(root / 'captured' / label, label, synthetic=False))
-        synthetic_entries.extend(collect_images(root / 'synthetic' / label, label, synthetic=True))
+    # Stratified split on the seed pool
+    tr, va, te = stratified_split(seed_pool, train_r, val_r, rng)
 
-    train, val, test = stratified_split(real_entries, seed)
-    train.extend(synthetic_entries)
+    # Self-captured images go to val / test only (deliberate distribution shift)
+    by_cls_cap = defaultdict(list)
+    for e in captured:
+        by_cls_cap[e['label']].append(e)
+    for cls, items in by_cls_cap.items():
+        rng.shuffle(items)
+        half = len(items) // 2
+        va.extend(items[:half])
+        te.extend(items[half:])
 
-    random.Random(seed).shuffle(train)
+    # Synthetic entries go into train (WeatherDataset filters via include_synthetic flag)
+    tr.extend(synthetic)
 
-    splits = {'train': train, 'val': val, 'test': test}
-    for name, entries in splits.items():
-        out = splits_dir / f'{name}.json'
-        with open(out, 'w') as f:
+    splits_dir = data_root / 'splits'
+    splits_dir.mkdir(exist_ok=True)
+
+    summary = {}
+    for name, entries in [('train', tr), ('val', va), ('test', te)]:
+        with open(splits_dir / f'{name}.json', 'w') as f:
             json.dump(entries, f, indent=2)
-        print(f'{name:5s}: {len(entries):5d} samples  ->  {out}')
+        # per-class breakdown
+        by_cls = defaultdict(int)
+        for e in entries:
+            by_cls[e['label']] += 1
+        summary[name] = dict(by_cls)
+        print(f'{name:5s}: {len(entries):4d} images  {dict(by_cls)}')
 
     print(f'\nSplit files written to {splits_dir}/')
+    return summary
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Prepare train/val/test split JSON files')
-    parser.add_argument('--data-root', default='data', help='Root of the data directory')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser = argparse.ArgumentParser(description='Prepare train/val/test splits')
+    parser.add_argument('--data-root', default='data')
+    parser.add_argument('--train-ratio', type=float, default=0.70)
+    parser.add_argument('--val-ratio', type=float, default=0.15)
+    parser.add_argument('--seed', type=int, default=42)
     args = parser.parse_args()
-    main(args.data_root, args.seed)
+    make_splits(args.data_root, args.train_ratio, args.val_ratio, args.seed)

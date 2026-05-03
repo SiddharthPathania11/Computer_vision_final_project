@@ -67,8 +67,15 @@ def train(args):
         f'{len(train_loader.dataset)} train | {len(val_loader.dataset)} val'
     )
 
+    # compute inverse-frequency class weights to handle imbalance
+    counts = torch.zeros(5)
+    for _, label in train_loader.dataset.samples:
+        counts[label] += 1
+    class_weights = (1.0 / counts.clamp(min=1)).to(device)
+    class_weights = class_weights / class_weights.sum() * len(counts)
+
     model = build_model(args.backbone).to(device)
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs)
 
