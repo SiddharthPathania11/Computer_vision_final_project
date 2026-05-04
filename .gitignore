@@ -11,10 +11,6 @@ venv/
 env/
 
 # Data (images not tracked)
-data/demo/*.jpg
-data/demo/*.jpeg
-data/demo/*.png
-data/demo/*.webp
 data/raw/**/*.jpg
 data/raw/**/*.jpeg
 data/raw/**/*.png
