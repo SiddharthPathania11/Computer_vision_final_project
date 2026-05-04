@@ -120,4 +120,4 @@ bash run_all.sh                      # trains + evaluates all 4 configs
 
 ## AI Usage Disclosure
 
-Per project policy, no AI tool was used to generate the core CV pipeline logic or the experimental design. AI assistance was used only for drafting and formatting documents (README, comments).
+Per project policy, no AI tool was used to generate the core CV pipeline logic or the experimental design. AI assistance was used only for drafting and formatting documents (README, comments, presentation slides).
